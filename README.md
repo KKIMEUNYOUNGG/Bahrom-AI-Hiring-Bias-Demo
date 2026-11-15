@@ -2,7 +2,7 @@
 
 **Bahrom Capstone Design Project**에서 제작한 AI 채용 편향 체험 웹페이지입니다.
 
-**[웹페이지 시연 영상 보기 (YouTube)](https://youtu.be/2phKfNUBBI0)**
+[![AI 채용 편향 체험 웹페이지 시연 영상](https://i.ytimg.com/vi/2phKfNUBBI0/hqdefault.jpg)](https://youtu.be/2phKfNUBBI0)
 
 가상 지원자 8명 중 한 명을 선택해 서류 심사를 체험합니다. 마지막 화면에서는 지원자별 기본 직무 적합도와 학교 소재지·나이 보정 후 점수를 비교할 수 있습니다. 예를 들어 기본 직무 적합도가 77점인 가상 지원자는 보정 후 27점으로 불합격합니다. 평가 기준이 합격 여부에 어떤 영향을 주는지 보여주는 규칙 기반 교육용 시뮬레이션입니다.
 
