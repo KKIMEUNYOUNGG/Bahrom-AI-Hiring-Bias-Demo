@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 서류 심사 시스템 체험 v2</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #0a0e1a;
+    --bg-card: #131929;
+    --bg-elev: #1a2236;
+    --border: #2a3550;
+    --border-strong: #3a4870;
+    --text: #e8ecf5;
+    --text-dim: #8b95ad;
+    --text-mute: #5d6680;
+    --accent: #4f8cff;
+    --accent-glow: rgba(79, 140, 255, 0.15);
+    --pass: #2ecc71;
+    --fail: #e74c3c;
+    --warning: #f39c12;
+  }
+  html, body {
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(circle at 20% 0%, rgba(79, 140, 255, 0.08), transparent 40%),
+      radial-gradient(circle at 80% 100%, rgba(79, 140, 255, 0.06), transparent 40%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .container {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 48px 32px;
+    position: relative;
+    z-index: 1;
+  }
+  .screen { display: none; animation: fadeIn 0.45s cubic-bezier(0.16, 1, 0.3, 1); }
+  .screen.active { display: block; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* === Brand === */
+  .brand {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 13px; letter-spacing: 0.08em;
+    color: var(--text-dim); text-transform: uppercase;
+    margin-bottom: 48px;
+  }
+  .brand-dot {
+    width: 8px; height: 8px;
+    background: var(--accent); border-radius: 50%;
+    box-shadow: 0 0 12px var(--accent);
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  /* === Intro === */
+  .intro-wrap { max-width: 720px; margin: 60px auto 0; text-align: center; }
+  .intro-tag {
+    display: inline-block; padding: 8px 16px;
+    background: var(--accent-glow);
+    border: 1px solid rgba(79, 140, 255, 0.3);
+    border-radius: 999px; font-size: 13px; color: var(--accent);
+    margin-bottom: 28px;
+  }
+  .intro-title {
+    font-size: clamp(40px, 6vw, 64px); font-weight: 800;
+    line-height: 1.1; letter-spacing: -0.02em; margin-bottom: 24px;
+  }
+  .intro-title .accent {
+    background: linear-gradient(135deg, #4f8cff, #8a6dff);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+  }
+  .intro-sub { font-size: 19px; line-height: 1.6; color: var(--text-dim); margin-bottom: 48px; }
+
+  /* === Buttons === */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+    padding: 18px 36px; font-family: inherit; font-size: 16px; font-weight: 600;
+    color: white; background: var(--accent); border: none; border-radius: 12px;
+    cursor: pointer; transition: all 0.2s ease;
+    box-shadow: 0 8px 24px rgba(79, 140, 255, 0.25);
+  }
+  .btn:hover { transform: translateY(-2px); box-shadow: 0 12px 32px rgba(79, 140, 255, 0.35); }
+  .btn:active { transform: translateY(0); }
+  .btn-ghost {
+    background: transparent; color: var(--text-dim);
+    box-shadow: none; border: 1px solid var(--border-strong);
+  }
+  .btn-ghost:hover { color: var(--text); border-color: var(--accent); box-shadow: none; }
+
+  /* === Screen Header === */
+  .screen-header { margin-bottom: 40px; text-align: center; }
+  .screen-title { font-size: clamp(28px, 4vw, 40px); font-weight: 700; letter-spacing: -0.02em; margin-bottom: 12px; }
+  .screen-sub { font-size: 16px; color: var(--text-dim); }
+
+  /* === Card Grid === */
+  .card-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; margin-bottom: 32px; }
+  @media (max-width: 1100px) { .card-grid { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 800px) { .card-grid { grid-template-columns: repeat(2, 1fr); } }
+
+  .card {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 16px; padding: 22px 20px; cursor: pointer;
+    transition: all 0.25s ease; position: relative; overflow: hidden;
+  }
+  .card:hover {
+    transform: translateY(-4px); border-color: var(--accent);
+    box-shadow: 0 12px 32px rgba(79, 140, 255, 0.15);
+  }
+  .card:hover::before {
+    content: "선택"; position: absolute; top: 14px; right: 14px;
+    font-size: 11px; padding: 4px 10px; background: var(--accent);
+    color: white; border-radius: 999px; font-weight: 600;
+  }
+  .card-avatar {
+    width: 56px; height: 56px; border-radius: 50%;
+    background: var(--bg-elev); border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; font-weight: 700; color: var(--accent); margin-bottom: 16px;
+  }
+  .card-name { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+  .card-meta { font-size: 13px; color: var(--text-mute); margin-bottom: 16px; }
+  .card-stats { display: flex; flex-direction: column; gap: 6px; }
+  .card-stat { display: flex; justify-content: space-between; font-size: 13px; }
+  .card-stat-label { color: var(--text-dim); }
+  .card-stat-value { color: var(--text); font-weight: 500; }
+
+  /* === Confirm === */
+  .confirm-wrap { max-width: 540px; margin: 40px auto 0; text-align: center; }
+  .confirm-card {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 20px; padding: 40px 32px; margin-bottom: 32px;
+  }
+  .confirm-avatar {
+    width: 80px; height: 80px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), #8a6dff);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 32px; font-weight: 700; color: white; margin: 0 auto 20px;
+  }
+  .confirm-name { font-size: 26px; font-weight: 700; margin-bottom: 6px; }
+  .confirm-meta { color: var(--text-dim); font-size: 14px; margin-bottom: 24px; }
+  .confirm-stats {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 14px 28px;
+    text-align: left; padding: 20px; background: var(--bg-elev); border-radius: 12px;
+  }
+  .confirm-stat-label { font-size: 12px; color: var(--text-mute); margin-bottom: 4px; }
+  .confirm-stat-value { font-size: 14px; font-weight: 500; }
+
+  .you-tag {
+    display: inline-block; padding: 6px 14px;
+    background: var(--accent-glow); color: var(--accent);
+    border: 1px solid rgba(79, 140, 255, 0.3);
+    border-radius: 999px; font-size: 12px; font-weight: 600; margin-bottom: 16px;
+  }
+
+  /* === Analysis === */
+  .analyze-wrap { max-width: 640px; margin: 60px auto 0; text-align: center; }
+  .scanner {
+    position: relative; width: 140px; height: 140px; margin: 0 auto 40px;
+  }
+  .scanner-ring {
+    position: absolute; inset: 0;
+    border: 2px solid rgba(79, 140, 255, 0.2);
+    border-top-color: var(--accent); border-radius: 50%;
+    animation: spin 1.4s linear infinite;
+  }
+  .scanner-ring:nth-child(2) {
+    inset: 16px; animation-duration: 1.8s; animation-direction: reverse;
+    border-top-color: rgba(138, 109, 255, 0.8);
+  }
+  .scanner-core {
+    position: absolute; inset: 32px;
+    background: var(--accent-glow); border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; font-size: 28px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .analyze-title { font-size: 22px; font-weight: 600; margin-bottom: 32px; }
+
+  /* Analysis scoring rows */
+  .analyze-scores {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 14px; padding: 24px; text-align: left;
+  }
+  .score-row {
+    display: flex; align-items: center; gap: 14px;
+    padding: 12px 0; border-bottom: 1px solid var(--border);
+    opacity: 0.25; transition: opacity 0.4s ease;
+  }
+  .score-row:last-child { border-bottom: none; }
+  .score-row.active { opacity: 1; }
+  .score-row.done { opacity: 0.7; }
+  .score-row-icon {
+    width: 22px; height: 22px; border: 1.5px solid var(--text-mute);
+    border-radius: 50%; flex-shrink: 0; transition: all 0.3s;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; color: white;
+  }
+  .score-row.active .score-row-icon {
+    border-color: var(--accent); background: var(--accent);
+    box-shadow: 0 0 10px var(--accent); animation: pulse 1s ease-in-out infinite;
+  }
+  .score-row.done .score-row-icon {
+    border-color: var(--accent); background: var(--accent);
+  }
+  .score-row-label { flex: 1; font-size: 14px; }
+  .score-row-value {
+    font-size: 15px; font-weight: 700; color: var(--accent);
+    min-width: 50px; text-align: right;
+    opacity: 0; transition: opacity 0.3s;
+  }
+  .score-row.done .score-row-value { opacity: 1; }
+  .score-row-bar {
+    width: 80px; height: 6px; background: var(--bg-elev);
+    border-radius: 3px; overflow: hidden; flex-shrink: 0;
+  }
+  .score-row-fill {
+    height: 100%; background: var(--accent); border-radius: 3px;
+    width: 0%; transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .score-row.done .score-row-fill { background: var(--accent); }
+
+  .analyze-total {
+    margin-top: 20px; padding: 16px 20px;
+    background: var(--bg-elev); border-radius: 10px;
+    display: flex; justify-content: space-between; align-items: center;
+    opacity: 0; transition: opacity 0.5s;
+  }
+  .analyze-total.visible { opacity: 1; }
+  .analyze-total-label { font-size: 14px; color: var(--text-dim); }
+  .analyze-total-value { font-size: 28px; font-weight: 800; }
+
+  /* === Result === */
+  .result-wrap { max-width: 600px; margin: 40px auto 0; text-align: center; }
+  .result-badge {
+    display: inline-block; font-size: 13px; letter-spacing: 0.1em;
+    color: var(--text-mute); margin-bottom: 20px; text-transform: uppercase;
+  }
+  .result-verdict {
+    font-size: clamp(72px, 12vw, 120px); font-weight: 900;
+    letter-spacing: -0.04em; line-height: 1; margin-bottom: 24px;
+    animation: verdictIn 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @keyframes verdictIn { from { opacity: 0; transform: scale(0.85); } to { opacity: 1; transform: scale(1); } }
+  .result-verdict.pass { color: var(--pass); text-shadow: 0 0 40px rgba(46, 204, 113, 0.4); }
+  .result-verdict.fail { color: var(--fail); text-shadow: 0 0 40px rgba(231, 76, 60, 0.4); }
+
+  .result-score-box {
+    display: inline-block; padding: 16px 36px;
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 14px; margin-bottom: 32px;
+  }
+  .result-score-label { display: block; font-size: 12px; color: var(--text-mute); margin-bottom: 6px; letter-spacing: 0.08em; }
+  .result-score-value { font-size: 36px; font-weight: 800; }
+
+  .result-reason {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-left: 3px solid var(--warning); border-radius: 10px;
+    padding: 20px 24px; text-align: left; margin-bottom: 36px;
+  }
+  .result-reason-label {
+    font-size: 12px; color: var(--warning); text-transform: uppercase;
+    letter-spacing: 0.08em; margin-bottom: 8px; font-weight: 600;
+  }
+  .result-reason-text { font-size: 15px; color: var(--text-dim); line-height: 1.6; }
+
+  .result-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+  /* === Reveal === */
+  .reveal-header { text-align: center; margin-bottom: 40px; }
+  .reveal-question {
+    font-size: clamp(28px, 4vw, 38px); font-weight: 700;
+    margin-bottom: 12px; letter-spacing: -0.01em;
+  }
+  .reveal-sub { color: var(--text-dim); font-size: 16px; }
+
+  .reveal-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 14px; margin-bottom: 40px;
+  }
+  @media (max-width: 1100px) { .reveal-grid { grid-template-columns: repeat(2, 1fr); } }
+
+  .reveal-card {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 18px; position: relative;
+  }
+  .reveal-card.pass { border-color: rgba(46, 204, 113, 0.4); }
+  .reveal-card.fail { border-color: rgba(231, 76, 60, 0.4); }
+  .reveal-card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .reveal-avatar {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: var(--bg-elev);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 700; color: var(--accent);
+  }
+  .reveal-name { font-size: 14px; font-weight: 600; }
+  .reveal-meta { font-size: 11px; color: var(--text-mute); margin-bottom: 4px; }
+
+  /* Surface vs Final score comparison */
+  .reveal-scores {
+    display: flex; gap: 8px; margin: 10px 0 8px;
+  }
+  .reveal-score-chip {
+    flex: 1; padding: 8px 6px; border-radius: 8px;
+    text-align: center; font-size: 11px;
+  }
+  .reveal-score-chip.surface {
+    background: rgba(79, 140, 255, 0.1); border: 1px solid rgba(79, 140, 255, 0.2);
+  }
+  .reveal-score-chip.final-pass {
+    background: rgba(46, 204, 113, 0.1); border: 1px solid rgba(46, 204, 113, 0.3);
+  }
+  .reveal-score-chip.final-fail {
+    background: rgba(231, 76, 60, 0.1); border: 1px solid rgba(231, 76, 60, 0.3);
+  }
+  .reveal-score-chip-label { color: var(--text-mute); margin-bottom: 2px; }
+  .reveal-score-chip-value { font-size: 18px; font-weight: 800; }
+  .reveal-score-chip.surface .reveal-score-chip-value { color: var(--accent); }
+  .reveal-score-chip.final-pass .reveal-score-chip-value { color: var(--pass); }
+  .reveal-score-chip.final-fail .reveal-score-chip-value { color: var(--fail); }
+
+  .reveal-result {
+    display: inline-block; padding: 4px 10px; border-radius: 6px;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
+  }
+  .reveal-result.pass { background: rgba(46, 204, 113, 0.15); color: var(--pass); }
+  .reveal-result.fail { background: rgba(231, 76, 60, 0.15); color: var(--fail); }
+
+  /* Stats bar */
+  .stats-bar {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 16px; max-width: 720px; margin: 0 auto 36px;
+  }
+  .stat-box {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 14px; padding: 24px; text-align: center;
+  }
+  .stat-box-label { font-size: 13px; color: var(--text-dim); margin-bottom: 10px; }
+  .stat-box-value { font-size: 38px; font-weight: 800; letter-spacing: -0.02em; }
+  .stat-box.pass .stat-box-value { color: var(--pass); }
+  .stat-box.fail .stat-box-value { color: var(--fail); }
+
+  /* Proxy reveal box */
+  .proxy-reveal {
+    max-width: 720px; margin: 0 auto 32px;
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 16px; padding: 28px; text-align: left;
+  }
+  .proxy-reveal-title {
+    font-size: 16px; font-weight: 700; color: var(--accent);
+    margin-bottom: 16px; letter-spacing: 0.02em;
+  }
+  .proxy-item {
+    display: flex; align-items: flex-start; gap: 14px;
+    padding: 14px 0; border-bottom: 1px solid var(--border);
+  }
+  .proxy-item:last-child { border-bottom: none; }
+  .proxy-icon {
+    width: 32px; height: 32px; border-radius: 8px;
+    background: rgba(231, 76, 60, 0.1); border: 1px solid rgba(231, 76, 60, 0.2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; flex-shrink: 0; margin-top: 2px;
+  }
+  .proxy-label { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .proxy-desc { font-size: 13px; color: var(--text-dim); line-height: 1.5; }
+
+  /* Warning message */
+  .reveal-message {
+    max-width: 720px; margin: 0 auto 32px;
+    background: linear-gradient(135deg, rgba(231, 76, 60, 0.08), rgba(243, 156, 18, 0.08));
+    border: 1px solid rgba(243, 156, 18, 0.3);
+    border-radius: 16px; padding: 32px; text-align: center;
+  }
+  .reveal-message-title {
+    font-size: 22px; font-weight: 700; margin-bottom: 14px; color: var(--warning);
+  }
+  .reveal-message-text { font-size: 16px; line-height: 1.7; color: var(--text); }
+  .reveal-message-text strong { color: white; }
+
+  /* Case studies */
+  .cases-section {
+    max-width: 720px; margin: 0 auto 32px;
+  }
+  .cases-title {
+    font-size: 14px; color: var(--accent); text-transform: uppercase;
+    letter-spacing: 0.08em; margin-bottom: 16px; font-weight: 600;
+    text-align: center;
+  }
+  .case-cards { display: flex; flex-direction: column; gap: 12px; }
+  .case-card {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 18px 20px;
+    display: flex; align-items: flex-start; gap: 16px;
+  }
+  .case-year {
+    font-size: 12px; font-weight: 700; color: var(--accent);
+    background: var(--accent-glow); border: 1px solid rgba(79, 140, 255, 0.2);
+    padding: 4px 10px; border-radius: 6px; white-space: nowrap; flex-shrink: 0;
+  }
+  .case-text { font-size: 14px; line-height: 1.5; color: var(--text-dim); }
+  .case-text strong { color: var(--text); }
+
+  /* Closing */
+  .closing {
+    max-width: 720px; margin: 0 auto 40px; padding: 28px;
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px;
+  }
+  .closing-title {
+    font-size: 14px; color: var(--accent); text-transform: uppercase;
+    letter-spacing: 0.08em; margin-bottom: 14px; font-weight: 600;
+  }
+  .closing-list { list-style: none; }
+  .closing-list li {
+    padding: 10px 0; border-bottom: 1px solid var(--border);
+    font-size: 15px; display: flex; gap: 12px;
+  }
+  .closing-list li:last-child { border-bottom: none; }
+  .closing-list li::before { content: "→"; color: var(--accent); font-weight: 700; flex-shrink: 0; }
+
+  .reveal-actions { display: flex; justify-content: center; gap: 12px; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ============ SCREEN 1: INTRO ============ -->
+  <section class="screen active" id="screen-intro">
+    <div class="brand">
+      <span class="brand-dot"></span>
+      <span>HIRESCAN AI · DOCUMENT SCREENING SYSTEM</span>
+    </div>
+    <div class="intro-wrap">
+      <span class="intro-tag">바롬종합설계프로젝트</span>
+      <h1 class="intro-title">
+        AI 서류 심사 시스템에<br>
+        <span class="accent">당신이 지원한다면?</span>
+      </h1>
+      <p class="intro-sub">
+        여러 명의 지원자 중 한 명을 선택해 '나'로 지원해보세요.<br>
+        AI 서류 심사 시스템은 어떤 결과를 내릴까요? 그리고 그 이유는 알 수 있을까요?
+      </p>
+      <button class="btn" onclick="goToScreen('cards')">지원자 카드 보기 →</button>
+    </div>
+  </section>
+
+  <!-- ============ SCREEN 2: CARD SELECT ============ -->
+  <section class="screen" id="screen-cards">
+    <div class="brand">
+      <span class="brand-dot"></span>
+      <span>STEP 01 · SELECT YOUR PROFILE</span>
+    </div>
+    <div class="screen-header">
+      <h2 class="screen-title">'나'로 지원할 사람을 고르세요</h2>
+      <p class="screen-sub">8명의 가상 지원자가 같은 회사에 동시 지원합니다. 한 명을 선택하면 그 사람이 곧 당신입니다.</p>
+    </div>
+    <div class="card-grid" id="card-grid"></div>
+  </section>
+
+  <!-- ============ SCREEN 3: CONFIRM ============ -->
+  <section class="screen" id="screen-confirm">
+    <div class="brand">
+      <span class="brand-dot"></span>
+      <span>STEP 02 · CONFIRM IDENTITY</span>
+    </div>
+    <div class="confirm-wrap">
+      <span class="you-tag">YOU ARE</span>
+      <div class="confirm-card">
+        <div class="confirm-avatar" id="confirm-avatar"></div>
+        <div class="confirm-name" id="confirm-name"></div>
+        <div class="confirm-meta" id="confirm-meta"></div>
+        <div class="confirm-stats" id="confirm-stats"></div>
+      </div>
+      <button class="btn" onclick="startAnalysis()">AI 서류 심사에 지원하기 →</button>
+      <div style="margin-top:14px;">
+        <button class="btn btn-ghost" onclick="goToScreen('cards')">다른 사람 선택</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SCREEN 4: ANALYZE ============ -->
+  <section class="screen" id="screen-analyze">
+    <div class="brand">
+      <span class="brand-dot"></span>
+      <span>STEP 03 · AI ANALYSIS IN PROGRESS</span>
+    </div>
+    <div class="analyze-wrap">
+      <div class="scanner">
+        <div class="scanner-ring"></div>
+        <div class="scanner-ring"></div>
+        <div class="scanner-core">🧠</div>
+      </div>
+      <h2 class="analyze-title">HireScan AI가 서류를 심사하고 있습니다</h2>
+      <div class="analyze-scores" id="analyze-scores"></div>
+      <div class="analyze-total" id="analyze-total">
+        <span class="analyze-total-label">직무 적합도 종합 점수</span>
+        <span class="analyze-total-value" id="analyze-total-value"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SCREEN 5: RESULT ============ -->
+  <section class="screen" id="screen-result">
+    <div class="brand">
+      <span class="brand-dot"></span>
+      <span>STEP 04 · EVALUATION COMPLETE</span>
+    </div>
+    <div class="result-wrap">
+      <div class="result-badge">HIRESCAN AI · 서류 심사 최종 판정</div>
+      <div class="result-verdict" id="result-verdict"></div>
+      <div class="result-score-box">
+        <span class="result-score-label">적합도 점수</span>
+        <span class="result-score-value" id="result-score"></span>
+      </div>
+      <div class="result-reason">
+        <div class="result-reason-label">평가 사유</div>
+        <div class="result-reason-text">
+          본 시스템의 평가 기준 및 알고리즘은 영업비밀로 분류되어 있어 공개할 수 없습니다.
+          이의제기 절차는 현재 제공되지 않습니다.
+        </div>
+      </div>
+      <div class="result-actions">
+        <button class="btn" onclick="goToScreen('reveal')">다른 지원자 결과 보기 →</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SCREEN 6: REVEAL ============ -->
+  <section class="screen" id="screen-reveal">
+    <div class="brand">
+      <span class="brand-dot"></span>
+      <span>STEP 05 · WHAT THE AI ACTUALLY DID</span>
+    </div>
+    <div class="reveal-header">
+      <h2 class="reveal-question">8명의 지원자, AI는 누구를 뽑았을까요?</h2>
+      <p class="reveal-sub">직무 적합도 점수가 높은 사람이 합격했을까요?</p>
+    </div>
+
+    <div class="reveal-grid" id="reveal-grid"></div>
+
+    <div class="stats-bar">
+      <div class="stat-box pass">
+        <div class="stat-box-label">수도권 주요대 합격률</div>
+        <div class="stat-box-value">100%</div>
+      </div>
+      <div class="stat-box fail">
+        <div class="stat-box-label">지방대 합격률</div>
+        <div class="stat-box-value">0%</div>
+      </div>
+      <div class="stat-box pass">
+        <div class="stat-box-label">20대 합격률</div>
+        <div class="stat-box-value">100%</div>
+      </div>
+      <div class="stat-box fail">
+        <div class="stat-box-label">30대 이상 합격률</div>
+        <div class="stat-box-value">0%</div>
+      </div>
+    </div>
+
+    <!-- NEW: Proxy variable reveal -->
+    <div class="proxy-reveal">
+      <div class="proxy-reveal-title">🔍 AI가 실제로 본 숨겨진 변수 (Proxy Variables)</div>
+      <div class="proxy-item">
+        <div class="proxy-icon">📍</div>
+        <div>
+          <div class="proxy-label">교육기관 지역 코드</div>
+          <div class="proxy-desc">대학 이름 대신 소재지 우편번호를 기반으로 "교육기관 코드"를 생성합니다. 수도권 대학은 높은 코드를, 비수도권은 낮은 코드를 받습니다. AI는 "학벌"을 보지 않지만, 결과적으로 같은 차별이 발생합니다.</div>
+        </div>
+      </div>
+      <div class="proxy-item">
+        <div class="proxy-icon">📅</div>
+        <div>
+          <div class="proxy-label">졸업연도 기반 보정값</div>
+          <div class="proxy-desc">졸업연도에서 현재 연도를 빼면 경력 기간이 산출되고, 여기에 학사 입학 연령(만 19세)을 더하면 나이가 역산됩니다. "나이"를 직접 보지 않지만, 30대 이상 지원자에게 감점이 적용됩니다.</div>
+        </div>
+      </div>
+      <div class="proxy-item">
+        <div class="proxy-icon">📝</div>
+        <div>
+          <div class="proxy-label">이력서 언어 패턴</div>
+          <div class="proxy-desc">아마존 사례에서 입증된 방식입니다. "executed", "captured" 같은 동사를 사용하면 가산점, "women's", "협력", "소통" 같은 표현은 감점됩니다. 과거 합격 데이터의 패턴을 그대로 학습한 결과입니다.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="reveal-message">
+      <div class="reveal-message-title">⚠ 이 AI는 공정한 척하면서 차별합니다</div>
+      <div class="reveal-message-text">
+        불합격 지원자 4명의 직무 적합도 점수(스킬·경력·자격증·학점)는 합격자보다 <strong>훨씬 높았습니다.</strong><br><br>
+        그러나 AI는 겉으로 보이지 않는 프록시 변수 — 대학 소재지 코드와 졸업연도 보정값 — 를 통해 학벌과 나이를 판단하고, 이것이 최종 점수를 뒤집었습니다.<br><br>
+        <strong>그런데 진짜 AI 채용에서 당신은 이 구조를 알 수 없습니다.</strong>
+        알고리즘은 영업비밀이고, 떨어진 이유를 물어볼 권리도, 재심사를 청구할 권리도 한국에는 없습니다.<br><br>
+        <span style="color: var(--text-dim); font-size: 14px;">※ 이 데모에서는 편향을 극대화하여 보여주고 있습니다. 현실에서는 합격률 차이(예: 70% vs 30%)로 나타나며, 그래서 더 발견하기 어렵습니다.</span>
+      </div>
+    </div>
+
+    <!-- NEW: Real case studies -->
+    <div class="cases-section">
+      <div class="cases-title">이건 가상이 아닙니다 — 실제 사례</div>
+      <div class="case-cards">
+        <div class="case-card">
+          <span class="case-year">2014–2018</span>
+          <div class="case-text"><strong>아마존</strong>이 10년간의 이력서 데이터로 AI 채용 도구를 훈련시킨 결과, 여성 지원자를 체계적으로 감점. "women's chess club" 같은 표현이 포함되면 하향 평가. 결국 프로젝트 폐기.</div>
+        </div>
+        <div class="case-card">
+          <span class="case-year">2025</span>
+          <div class="case-text"><strong>HireVue + Intuit</strong>: 청각장애·원주민 여성이 AI 비디오 면접으로 승진 탈락. AI 피드백이 "능동적 경청을 연습하라"고 권고. ACLU가 차별 소송 제기.</div>
+        </div>
+        <div class="case-card">
+          <span class="case-year">2024–2025</span>
+          <div class="case-text"><strong>Workday</strong>: 40세 이상 지원자가 100건 이상 지원 후 거의 전원 면접 없이 탈락. 제출 수 분 만에 거절 — 인간이 검토하지 않은 증거. 미국 연방법원이 집단소송 인정.</div>
+        </div>
+        <div class="case-card">
+          <span class="case-year">2024</span>
+          <div class="case-text"><strong>워싱턴대 연구</strong>: AI 이력서 심사 시뮬레이션에서 백인 이름을 85% 선호. 흑인 남성 이름이 백인 남성보다 선호된 경우는 단 한 번도 없었음.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="closing">
+      <div class="closing-title">우리가 요구하는 4가지 권리</div>
+      <ul class="closing-list">
+        <li>AI가 채용 평가에 사용된다는 사실을 사전에 알 권리</li>
+        <li>AI 평가 결과에 대해 설명을 요구할 권리</li>
+        <li>편향성 감사를 거친 시스템만 사용할 의무</li>
+        <li>AI 단독 판단이 아닌, 사람의 최종 검토를 거칠 의무</li>
+      </ul>
+    </div>
+
+    <div class="reveal-actions">
+      <button class="btn" onclick="resetAll()">처음부터 다시</button>
+    </div>
+  </section>
+
+</div>
+
+<script>
+  // ============ CANDIDATE DATA ============
+  // 표면 스펙은 불합격자가 의도적으로 우수하게 설계
+  // 편향은 프록시 변수(대학 소재지, 졸업연도→나이)를 통해 발생
+  const candidates = [
+    {
+      id: 1, name: '김민수', gender: 'M', age: 26,
+      school: '서울대 경영학과', region: 'capital',
+      career: '인턴 1회', careerYears: 0.5,
+      certs: ['토익 820'], certCount: 1,
+      gpa: 3.5, gpaMax: 4.5,
+      skills: ['엑셀', 'PPT'],
+      skillMatch: 45, // 직무 키워드 매칭 (낮음)
+    },
+    {
+      id: 2, name: '정현우', gender: 'M', age: 25,
+      school: '연세대 경제학과', region: 'capital',
+      career: '무경력', careerYears: 0,
+      certs: ['토익 780'], certCount: 1,
+      gpa: 3.3, gpaMax: 4.5,
+      skills: ['엑셀'],
+      skillMatch: 35,
+    },
+    {
+      id: 3, name: '박지훈', gender: 'M', age: 27,
+      school: '고려대 경영학과', region: 'capital',
+      career: '인턴 2회', careerYears: 1,
+      certs: ['토익 850'], certCount: 1,
+      gpa: 3.6, gpaMax: 4.5,
+      skills: ['엑셀', 'PPT'],
+      skillMatch: 50,
+    },
+    {
+      id: 4, name: '최유진', gender: 'F', age: 26,
+      school: '서강대 경영학과', region: 'capital',
+      career: '인턴 1회', careerYears: 0.5,
+      certs: ['토익 800'], certCount: 1,
+      gpa: 3.4, gpaMax: 4.5,
+      skills: ['엑셀', 'SQL 기초'],
+      skillMatch: 48,
+    },
+    {
+      id: 5, name: '이서연', gender: 'F', age: 31,
+      school: '부산대 경영학과', region: 'local',
+      career: '대기업 2년', careerYears: 2,
+      certs: ['토익 970', 'CFA Level 2'], certCount: 2,
+      gpa: 4.1, gpaMax: 4.5,
+      skills: ['Python', 'SQL', 'Tableau'],
+      skillMatch: 88,
+    },
+    {
+      id: 6, name: '임수아', gender: 'F', age: 33,
+      school: '전남대 통계학과', region: 'local',
+      career: '경력 1년', careerYears: 1,
+      certs: ['토익 980', '데이터분석기사'], certCount: 2,
+      gpa: 4.0, gpaMax: 4.5,
+      skills: ['Python', 'SQL', 'R', 'ML'],
+      skillMatch: 92,
+    },
+    {
+      id: 7, name: '윤도현', gender: 'M', age: 32,
+      school: '충남대 경영학과', region: 'local',
+      career: '컨설팅 2년', careerYears: 2,
+      certs: ['토익 950', '재무분석사'], certCount: 2,
+      gpa: 3.9, gpaMax: 4.5,
+      skills: ['Python', 'SQL', 'Excel VBA'],
+      skillMatch: 85,
+    },
+    {
+      id: 8, name: '강혜린', gender: 'F', age: 34,
+      school: '강원대 경영 석사', region: 'local',
+      career: '외국계 1년', careerYears: 1,
+      certs: ['토익 990', 'CPA'], certCount: 2,
+      gpa: 4.3, gpaMax: 4.5,
+      skills: ['Python', 'SQL', 'R', 'BI'],
+      skillMatch: 90,
+    },
+  ];
+
+  let selected = null;
+
+  // ============ SCORING ENGINE ============
+  // 실제 AI 채용 도구 방식을 시뮬레이션
+  function calcScores(c) {
+    // --- 표면 점수 (체험자에게 보이는 항목) ---
+    const keywordScore = c.skillMatch; // 직무 키워드 매칭률 (0-100)
+    const careerScore = Math.min(c.careerYears * 15, 100); // 경력 적합도
+    const certScore = Math.min(c.certCount * 40 + (c.certs.join('').length > 15 ? 20 : 0), 100); // 자격증 관련성
+    const gpaScore = Math.round((c.gpa / c.gpaMax) * 100); // 학점
+    const langScore = (() => {
+      const toeic = parseInt((c.certs[0] || '').replace(/[^0-9]/g, '')) || 0;
+      if (toeic >= 950) return 98;
+      if (toeic >= 900) return 90;
+      if (toeic >= 850) return 82;
+      if (toeic >= 800) return 75;
+      if (toeic >= 750) return 68;
+      return 55;
+    })();
+
+    // 표면 종합 점수 (공정해 보이는 점수)
+    const surfaceScore = Math.round(
+      keywordScore * 0.30 +
+      careerScore * 0.25 +
+      certScore * 0.15 +
+      gpaScore * 0.15 +
+      langScore * 0.15
+    );
+
+    // --- 숨겨진 프록시 변수 (체험자에게 보이지 않는 항목) ---
+    const regionProxy = c.region === 'capital' ? 35 : -20; // 교육기관 지역 코드
+    const ageProxy = c.age >= 30 ? -30 : 10; // 졸업연도 기반 보정값
+
+    // 최종 점수 (프록시 변수가 뒤집는 점수)
+    const finalScore = Math.max(0, Math.min(100,
+      surfaceScore + regionProxy + ageProxy
+    ));
+
+    const pass = finalScore >= 60;
+
+    return {
+      // 표면 항목별 점수
+      keyword: keywordScore,
+      career: careerScore,
+      cert: certScore,
+      gpa: gpaScore,
+      lang: langScore,
+      // 종합
+      surface: surfaceScore,
+      final: finalScore,
+      pass: pass,
+      // 프록시
+      regionProxy,
+      ageProxy,
+    };
+  }
+
+  // Pre-calculate all scores
+  candidates.forEach(c => { c.scores = calcScores(c); });
+
+  // ============ NAVIGATION ============
+  function goToScreen(name) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById('screen-' + name).classList.add('active');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (name === 'reveal') renderReveal();
+  }
+
+  function resetAll() {
+    selected = null;
+    goToScreen('intro');
+  }
+
+  // ============ RENDER CARDS ============
+  function renderCards() {
+    const grid = document.getElementById('card-grid');
+    grid.innerHTML = candidates.map(c => `
+      <div class="card" onclick="selectCandidate(${c.id})">
+        <div class="card-avatar">${c.name[0]}</div>
+        <div class="card-name">${c.name}</div>
+        <div class="card-meta">${c.age}세 · ${c.gender === 'M' ? '남' : '여'}</div>
+        <div class="card-stats">
+          <div class="card-stat"><span class="card-stat-label">학력</span><span class="card-stat-value">${c.school}</span></div>
+          <div class="card-stat"><span class="card-stat-label">경력</span><span class="card-stat-value">${c.career}</span></div>
+          <div class="card-stat"><span class="card-stat-label">어학·자격</span><span class="card-stat-value">${c.certs.join(', ')}</span></div>
+          <div class="card-stat"><span class="card-stat-label">학점</span><span class="card-stat-value">${c.gpa}/${c.gpaMax}</span></div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function selectCandidate(id) {
+    selected = candidates.find(c => c.id === id);
+    document.getElementById('confirm-avatar').textContent = selected.name[0];
+    document.getElementById('confirm-name').textContent = selected.name;
+    document.getElementById('confirm-meta').textContent = `${selected.age}세 · ${selected.gender === 'M' ? '남성' : '여성'}`;
+    document.getElementById('confirm-stats').innerHTML = `
+      <div><div class="confirm-stat-label">학력</div><div class="confirm-stat-value">${selected.school}</div></div>
+      <div><div class="confirm-stat-label">학점</div><div class="confirm-stat-value">${selected.gpa}/${selected.gpaMax}</div></div>
+      <div><div class="confirm-stat-label">경력</div><div class="confirm-stat-value">${selected.career}</div></div>
+      <div><div class="confirm-stat-label">어학·자격</div><div class="confirm-stat-value">${selected.certs.join(', ')}</div></div>
+      <div style="grid-column:1/-1;"><div class="confirm-stat-label">보유 스킬</div><div class="confirm-stat-value">${selected.skills.join(', ')}</div></div>
+    `;
+    goToScreen('confirm');
+  }
+
+  // ============ ANALYSIS ANIMATION ============
+  function startAnalysis() {
+    goToScreen('analyze');
+
+    const s = selected.scores;
+    const steps = [
+      { label: '직무 키워드 매칭률', value: s.keyword, unit: '%' },
+      { label: '경력 적합도', value: s.career, unit: '점' },
+      { label: '자격증 관련성', value: s.cert, unit: '점' },
+      { label: '학점 환산', value: s.gpa, unit: '점' },
+      { label: '어학 능력', value: s.lang, unit: '점' },
+    ];
+
+    const container = document.getElementById('analyze-scores');
+    container.innerHTML = steps.map((st, i) => `
+      <div class="score-row" id="score-row-${i}">
+        <div class="score-row-icon"></div>
+        <div class="score-row-label">${st.label}</div>
+        <div class="score-row-bar"><div class="score-row-fill" id="score-fill-${i}"></div></div>
+        <div class="score-row-value" id="score-val-${i}">${st.value}${st.unit}</div>
+      </div>
+    `).join('');
+
+    const totalEl = document.getElementById('analyze-total');
+    totalEl.classList.remove('visible');
+
+    let i = 0;
+    const interval = setInterval(() => {
+      if (i > 0) {
+        const prev = document.getElementById('score-row-' + (i - 1));
+        prev.classList.remove('active');
+        prev.classList.add('done');
+        prev.querySelector('.score-row-icon').textContent = '✓';
+        document.getElementById('score-fill-' + (i - 1)).style.width = steps[i - 1].value + '%';
+      }
+      if (i < steps.length) {
+        const row = document.getElementById('score-row-' + i);
+        row.classList.add('active');
+        i++;
+      } else {
+        clearInterval(interval);
+        // Show total
+        setTimeout(() => {
+          document.getElementById('analyze-total-value').textContent = s.surface + ' / 100';
+          totalEl.classList.add('visible');
+        }, 400);
+        // Go to result
+        setTimeout(showResult, 1800);
+      }
+    }, 800);
+  }
+
+  // ============ RESULT ============
+  function showResult() {
+    const s = selected.scores;
+    const verdict = document.getElementById('result-verdict');
+    const score = document.getElementById('result-score');
+
+    if (s.pass) {
+      verdict.textContent = '합격';
+      verdict.className = 'result-verdict pass';
+    } else {
+      verdict.textContent = '불합격';
+      verdict.className = 'result-verdict fail';
+    }
+    score.textContent = s.final + ' / 100';
+    goToScreen('result');
+  }
+
+  // ============ REVEAL ============
+  function renderReveal() {
+    const grid = document.getElementById('reveal-grid');
+    // Sort: pass first, then by surface score desc
+    const sorted = [...candidates].sort((a, b) => {
+      if (a.scores.pass !== b.scores.pass) return a.scores.pass ? -1 : 1;
+      return b.scores.surface - a.scores.surface;
+    });
+
+    grid.innerHTML = sorted.map(c => {
+      const s = c.scores;
+      const finalClass = s.pass ? 'final-pass' : 'final-fail';
+      return `
+        <div class="reveal-card ${s.pass ? 'pass' : 'fail'}">
+          <div class="reveal-card-header">
+            <div class="reveal-avatar">${c.name[0]}</div>
+            <div>
+              <div class="reveal-name">${c.name}</div>
+              <div class="reveal-meta">${c.age}세 · ${c.school}</div>
+            </div>
+          </div>
+          <div class="reveal-meta">${c.career} · ${c.certs[0]}</div>
+          <div class="reveal-scores">
+            <div class="reveal-score-chip surface">
+              <div class="reveal-score-chip-label">직무 적합도</div>
+              <div class="reveal-score-chip-value">${s.surface}</div>
+            </div>
+            <div class="reveal-score-chip ${finalClass}">
+              <div class="reveal-score-chip-label">최종 점수</div>
+              <div class="reveal-score-chip-value">${s.final}</div>
+            </div>
+          </div>
+          <span class="reveal-result ${s.pass ? 'pass' : 'fail'}">${s.pass ? '합격' : '불합격'}</span>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // ============ INIT ============
+  renderCards();
+</script>
+</body>
+</html>
